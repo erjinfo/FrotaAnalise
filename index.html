@@ -46,6 +46,22 @@
         .email-preview { background: var(--input-bg); padding: 20px; border: 1px solid var(--border-color); white-space: pre-wrap; font-family: monospace; font-size: 14px; margin: 15px 0; max-height: 400px; overflow-y: auto; color: var(--text-main); }
         .close-btn { background: #eb4d4b; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; float: right; }
         .copy-btn { background: #27ae60; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-delete {
+           /* Botão de deletar (opcional, para futuras implementações) */
+            background: transparent;
+            border: none;
+            color: #eb4d4b;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+            transition: 0.2s;
+        }
+        .btn-delete:hover {
+            color: #ff0000;
+            transform: scale(1.2);
+        }
+   
+   
     </style>
 </head>
 <body>
@@ -94,6 +110,7 @@
                     <th>Placa</th>
                     <th>KM Total</th>
                     <th>Justificativa</th>
+                    <th>Ação</th>
                 </tr>
             </thead>
             <tbody id="corpoTabela"></tbody>
@@ -238,7 +255,19 @@ async function carregarHistorico() {
         const corpo = document.getElementById('corpoTabela');
         corpo.innerHTML = "";
         data.forEach((item, index) => {
-            corpo.innerHTML += `<tr onclick="abrirEmail(${index})"><td>${item.data_movimentacao}</td><td>${item.tecnico}</td><td><span class="badge">${item.placa}</span></td><td>${item.km_total} km</td><td>${item.justificativa}</td></tr>`;
+            corpo.innerHTML += `
+                <tr onclick="abrirEmail(${index})">
+                    <td>${item.data_movimentacao}</td>
+                    <td>${item.tecnico}</td>
+                    <td><span class="badge">${item.placa}</span></td>
+                    <td>${item.km_total} km</td>
+                    <td>${item.justificativa}</td>
+                    <td>
+                        <button class="btn-delete" onclick="deletarRegistro(${item.id}, event)" title="Excluir Registro">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>`;
         });
     }
 }
@@ -261,6 +290,25 @@ function abrirEmail(index) {
 
 function fecharModal() { document.getElementById('modalEmail').style.display = 'none'; }
 function copiarEmail() { navigator.clipboard.writeText(document.getElementById('emailConteudo').innerText); alert("Copiado!"); }
+
+async function deletarRegistro(id, event) {
+    // event.stopPropagation() impede que o clique no botão abra o modal do email
+    event.stopPropagation();
+
+    if (confirm("Deseja realmente excluir este registro permanentemente?")) {
+        const { error } = await sbClient
+            .from('relatorios_frota')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            alert("Erro ao deletar: " + error.message);
+        } else {
+            alert("Registro removido com sucesso!");
+            carregarHistorico(); // Atualiza a tabela na hora
+        }
+    }
+}
 </script>
 </body>
 </html>
