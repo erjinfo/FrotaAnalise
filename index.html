@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frota Analise - Eng. Eric Jonas</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-body: #eef2f7; --bg-card: #ffffff; --text-main: #333333; --text-sub: #666666;
+            --border-color: #dddddd; --input-bg: #ffffff; --table-hover: #f1f7ff;
+            --modal-bg: rgba(0,0,0,0.5); --site-blue: #1a73e8; --footer-dark-bg: #0b111b;
+        }
+        body.dark-mode {
+            --bg-body: #0d1117; --bg-card: #161b22; --text-main: #e6edf3; --text-sub: #8b949e;
+            --border-color: #30363d; --input-bg: #0d1117; --table-hover: #21262d;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-body); color: var(--text-main); padding: 20px; transition: 0.3s; margin: 0; }
+        .container { max-width: 1100px; margin: auto; padding-bottom: 50px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .theme-switch { cursor: pointer; padding: 8px 15px; border-radius: 20px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-main); font-weight: bold; }
+        .card { background: var(--bg-card); padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 30px; border: 1px solid var(--border-color); }
+        h2, h3 { color: var(--site-blue); margin-top: 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .field { display: flex; flex-direction: column; }
+        label { font-size: 11px; font-weight: bold; color: var(--text-sub); margin-bottom: 5px; text-transform: uppercase; }
+        input, select, textarea { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--input-bg); color: var(--text-main); outline: none; }
+        .btn-primary { background: var(--site-blue); color: white; border: none; padding: 14px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; margin-top: 10px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color); color: var(--text-sub); }
+        td { padding: 12px; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+        tr:hover { background-color: var(--table-hover); }
+        .badge { background: var(--site-blue); color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+
+        /* Rodapé Eric Jonas */
+        .dev-footer { margin-top: 50px; display: flex; justify-content: center; }
+        .dev-box { background-color: var(--footer-dark-bg); border: 1px solid #1e293b; border-radius: 12px; padding: 15px 25px; display: flex; align-items: center; gap: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); width: fit-content; }
+        .dev-logo { width: 70px; height: 70px; object-fit: contain; }
+        .dev-text { color: var(--site-blue); font-size: 16px; font-weight: bold; }
+        .dev-email { color: #94a3b8; font-size: 13px; text-decoration: none; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: var(--modal-bg); }
+        .modal-content { background: var(--bg-card); margin: 5% auto; padding: 25px; width: 70%; border-radius: 12px; border: 1px solid var(--border-color); }
+        .email-preview { background: var(--input-bg); padding: 20px; border: 1px solid var(--border-color); white-space: pre-wrap; font-family: monospace; font-size: 14px; margin: 15px 0; max-height: 400px; overflow-y: auto; color: var(--text-main); }
+        .close-btn { background: #eb4d4b; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; float: right; }
+        .copy-btn { background: #27ae60; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>🚗 Frota Analise</h2>
+        <button class="theme-switch" onclick="toggleTheme()" id="themeBtn">🌙 Modo Escuro</button>
+    </div>
+
+    <div class="card">
+        <h3>Novo Relatório</h3>
+        <p style="font-size: 12px; color: var(--site-blue); font-weight: bold; margin-bottom: 15px;">
+            SISTEMA AUTO-DETECT: COLE TRIP DATA OU EXCEL COBLI DIRETAMENTE ABAIXO.
+        </p>
+
+        <div class="grid">
+            <div class="field"><label>Técnico</label><input type="text" id="nome" placeholder="Nome do motorista"></div>
+            <div class="field"><label>Filial</label><input type="text" id="filial" placeholder="Ex: Sumaré"></div>
+            <div class="field"><label>Placa Alvo</label><input type="text" id="placa" placeholder="Filtrar por placa"></div>
+            <div class="field"><label>Data</label><input type="text" id="data"></div>
+            <div class="field">
+                <label>Rastreador</label>
+                <select id="rastreador">
+                    <option value="Cobli">Cobli</option>
+                    <option value="Mzone">Mzone</option>
+                    <option value="Carblock">Carblock</option>
+                </select>
+            </div>
+            <div class="field"><label>Justificativa</label><input type="text" id="justificativa"></div>
+        </div>
+        <div class="field">
+            <label>Cole aqui os dados brutos:</label>
+            <textarea id="rawData" rows="4" placeholder="Cole Trip Data ou Tabela Excel..."></textarea>
+        </div>
+        <button class="btn-primary" onclick="processarESalvar()">Analisar e Salvar no Banco</button>
+    </div>
+
+    <div class="card">
+        <h3>📋 Histórico de Análises</h3>
+        <table id="tabelaRelatorios">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Técnico</th>
+                    <th>Placa</th>
+                    <th>KM Total</th>
+                    <th>Justificativa</th>
+                </tr>
+            </thead>
+            <tbody id="corpoTabela"></tbody>
+        </table>
+    </div>
+
+    <footer class="dev-footer">
+        <div class="dev-box">
+            <img src="logo.png" alt="Logo" class="dev-logo">
+            <div class="dev-info">
+                <div class="dev-text">Site desenvolvido por Eng. Eric Jonas</div>
+                <a href="mailto:erj.informatica@gmail.com" class="dev-email">✉ erj.informatica@gmail.com</a>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<div id="modalEmail" class="modal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="fecharModal()">Fechar</button>
+        <h3>Relatório Formatado</h3>
+        <div id="emailConteudo" class="email-preview"></div>
+        <button class="copy-btn" onclick="copiarEmail()">Copiar para o E-mail</button>
+    </div>
+</div>
+
+<script>
+    const SB_URL = "https://sdavoozyfnegtzxosabz.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkYXZvb3p5Zm5lZ3R6eG9zYWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODM0NjcsImV4cCI6MjA5MTc1OTQ2N30.Re_TEacuSJSNxCczjdYcv6137nbvF-pe057y5tErgOM";
+const sbClient = supabase.createClient(SB_URL, SB_KEY);
+let historicoLocal = [];
+
+function setarDataAtual() {
+    const d = new Date();
+    document.getElementById('data').value = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
+}
+
+function toggleTheme() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    document.getElementById('themeBtn').innerText = isDark ? '☀️ Modo Claro' : '🌙 Modo Escuro';
+}
+
+if (localStorage.getItem('theme') === 'dark') { document.body.classList.add('dark-mode'); document.getElementById('themeBtn').innerText = '☀️ Modo Claro'; }
+window.onload = () => { setarDataAtual(); carregarHistorico(); };
+
+async function processarESalvar() {
+    const raw = document.getElementById('rawData').value.trim();
+    const placaAlvo = document.getElementById('placa').value.trim().toUpperCase();
+    const justificativa = document.getElementById('justificativa').value.trim();
+
+    if (!raw) return alert("Cole os dados brutos!");
+    if (!justificativa) return alert("Preencha a justificativa!");
+
+    let totalKm = 0, totalMins = 0, h1 = "", h2 = "", oriIni = "Consultar Sistema", destFim = "Consultar Sistema";
+    let detectPlaca = "", detectNome = "", detectData = "";
+
+    try {
+        if (raw.includes('\t')) { // Lógica Excel
+            const linhas = raw.split('\n');
+            let tIni = [], tFim = [];
+            let filterPlaca = placaAlvo;
+
+            linhas.forEach(linha => {
+                const col = linha.split('\t');
+                if (col.length >= 8 && col[0].includes('/')) {
+                    const pLinha = col[1].trim().toUpperCase();
+                    if (!filterPlaca) filterPlaca = pLinha;
+                    if (pLinha === filterPlaca) {
+                        detectPlaca = pLinha;
+                        detectNome = col[2].trim();
+                        detectData = col[0].trim();
+                        totalMins += parseInt(col[3]) || 0;
+                        totalKm += parseFloat(col[5].replace(',', '.')) || 0;
+                        if (col[6].includes(' ')) tIni.push(col[6].split(' ')[1]);
+                        if (col[7].includes(' ')) tFim.push(col[7].split(' ')[1]);
+                    }
+                }
+            });
+            h1 = tIni.length ? tIni.sort()[0] : "";
+            h2 = tFim.length ? tFim.sort().reverse()[0] : "";
+        } else { // Lógica Trip Data
+            const blocos = raw.split(/Trip Data/i).filter(b => b.trim().length > 20);
+            blocos.forEach((bloco, i) => {
+                const dMatch = bloco.match(/Distância\s+([\d,.]+)/i);
+                if (dMatch) totalKm += parseFloat(dMatch[1].replace(',', '.'));
+                const tMatch = bloco.match(/Duração\s+(\d+h)?\s*?(\d+)m\s+\(([\d:]+) - ([\d:]+)\)/i);
+                if (tMatch) {
+                    totalMins += ((tMatch[1] ? parseInt(tMatch[1]) : 0) * 60) + parseInt(tMatch[2]);
+                    if (i === 0) h1 = tMatch[3];
+                    h2 = tMatch[4];
+                }
+                if (i === 0) {
+                    const o = bloco.match(/Localização inicial\s+([^\n-]+)/i);
+                    if (o) oriIni = o[1].trim();
+                    const pMatch = bloco.match(/Veículo\s+([^\n-]+)/i);
+                    if (pMatch) { detectNome = pMatch[1].split(' - ')[0]; detectPlaca = pMatch[1].split(' - ')[1]; }
+                }
+                if (i === blocos.length - 1) {
+                    const d = bloco.match(/Localização final\s+([^\n-]+)/i);
+                    if (d) destFim = d[1].trim();
+                }
+            });
+            detectData = document.getElementById('data').value;
+        }
+
+        if (detectNome) document.getElementById('nome').value = detectNome;
+        if (detectPlaca) document.getElementById('placa').value = detectPlaca;
+
+        const dadosDB = {
+            data_movimentacao: detectData || document.getElementById('data').value,
+            tecnico: document.getElementById('nome').value,
+            placa: document.getElementById('placa').value,
+            filial: document.getElementById('filial').value,
+            rastreador: document.getElementById('rastreador').value,
+            km_total: parseFloat(totalKm.toFixed(1)), // Envia como número
+            tempo_total: `${Math.floor(totalMins/60)}h ${totalMins%60} min`,
+            origem_inicial: oriIni,
+            destino_final: destFim,
+            justificativa: justificativa,
+            hora_inicio: h1,
+            hora_fim: h2
+        };
+
+        const { error } = await sbClient.from('relatorios_frota').insert([dadosDB]);
+        
+        if (error) {
+            console.error("Erro Supabase:", error);
+            alert("Erro ao salvar: " + error.message + "\nVerifique se as colunas hora_inicio e hora_fim foram criadas.");
+        } else {
+            alert("Sucesso!");
+            document.getElementById('rawData').value = "";
+            carregarHistorico();
+        }
+    } catch (e) { alert("Erro no processamento."); console.error(e); }
+}
+
+async function carregarHistorico() {
+    const { data } = await sbClient.from('relatorios_frota').select('*').order('id', { ascending: false });
+    if (data) {
+        historicoLocal = data;
+        const corpo = document.getElementById('corpoTabela');
+        corpo.innerHTML = "";
+        data.forEach((item, index) => {
+            corpo.innerHTML += `<tr onclick="abrirEmail(${index})"><td>${item.data_movimentacao}</td><td>${item.tecnico}</td><td><span class="badge">${item.placa}</span></td><td>${item.km_total} km</td><td>${item.justificativa}</td></tr>`;
+        });
+    }
+}
+
+function abrirEmail(index) {
+    const d = historicoLocal[index];
+    // CORREÇÃO AQUI: String(valor) garante que o replace funcione se o valor for número
+    const kmFormatado = String(d.km_total).replace('.', ',');
+    
+    const texto = `Assunto: Relatório de Movimentação fora de padrão ${d.tecnico}, ${d.placa}, ${d.data_movimentacao}, ${d.filial}, ${d.rastreador}\n\n` +
+                  `Corpo do Email:\n\nRELATÓRIO DE DESLOCAMENTO VEICULAR\n\n` +
+                  `Data: ${d.data_movimentacao}\nVeículo: ${d.placa}\nCondutor: ${d.tecnico} (${d.filial})\n\n` +
+                  `Deslocamento registrado:\n\nHora: das ${d.hora_inicio || '--:--'} às ${d.hora_fim || '--:--'}\n` +
+                  `Tempo total em movimento: ${d.tempo_total}\nDistância total: ${kmFormatado} km\n\n` +
+                  `Origem: ${d.origem_inicial}\nDestino: ${d.destino_final}\n\nJustificativa: ${d.justificativa}`;
+    
+    document.getElementById('emailConteudo').innerText = texto;
+    document.getElementById('modalEmail').style.display = 'block';
+}
+
+function fecharModal() { document.getElementById('modalEmail').style.display = 'none'; }
+function copiarEmail() { navigator.clipboard.writeText(document.getElementById('emailConteudo').innerText); alert("Copiado!"); }
+</script>
+</body>
+</html>
