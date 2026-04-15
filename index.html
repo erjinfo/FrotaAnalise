@@ -25,7 +25,7 @@
         .field { display: flex; flex-direction: column; }
         label { font-size: 11px; font-weight: bold; color: var(--text-sub); margin-bottom: 5px; text-transform: uppercase; }
         input, select, textarea { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--input-bg); color: var(--text-main); outline: none; }
-        .btn-primary { background: var(--site-blue); color: white; border: none; padding: 14px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; margin-top: 10px; }
+        .btn-primary { background: var(--site-blue); color: white; border: none; padding: 14px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; font-size: 16px; margin-top: 10px; cursor: pointer; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
         th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color); color: var(--text-sub); }
@@ -42,7 +42,7 @@
         .dev-email { color: #94a3b8; font-size: 13px; text-decoration: none; }
 
         .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: var(--modal-bg); }
-        .modal-content { background: var(--bg-card); margin: 5% auto; padding: 25px; width: 80%; border-radius: 12px; border: 1px solid var(--border-color); }
+        .modal-content { background: var(--bg-card); margin: 5% auto; padding: 25px; width: 70%; border-radius: 12px; border: 1px solid var(--border-color); }
         .email-preview { background: var(--input-bg); padding: 20px; border: 1px solid var(--border-color); white-space: pre-wrap; font-family: monospace; font-size: 14px; color: var(--text-main); margin: 15px 0; max-height: 400px; overflow-y: auto; }
         .close-btn { background: #eb4d4b; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; float: right; }
         .copy-btn { background: #27ae60; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
@@ -66,9 +66,9 @@
             <div class="field">
                 <label>Rastreador</label>
                 <select id="rastreador">
-                    <option value="Carblock">Carblock (Log de Posições)</option>
-                    <option value="Cobli">Cobli (Excel)</option>
                     <option value="Mzone">Mzone (Web - Trip Data)</option>
+                    <option value="Cobli">Cobli (Excel)</option>
+                    <option value="Carblock">Carblock (Log de Posições)</option>
                 </select>
             </div>
             <div class="field"><label>Justificativa</label><input type="text" id="justificativa"></div>
@@ -77,7 +77,7 @@
             <label>Dados Brutos para Análise:</label>
             <textarea id="rawData" rows="5" placeholder="Cole os dados aqui..."></textarea>
         </div>
-        <button class="btn-primary" onclick="processarESalvar()">Analisar e Salvar no Banco</button>
+        <button class="btn-primary" onclick="processarESalvar()">Analisar e Salvar Relatório</button>
     </div>
 
     <div class="card">
@@ -123,12 +123,17 @@
     const sbClient = supabase.createClient(SB_URL, SB_KEY);
     let historicoLocal = [];
 
-    // HORÁRIO DE CORTE: 08:30 às 18:00
+    // REGRA DE HORÁRIO: 08:30 às 18:00
     function estaForaDoHorario(dt) {
         const diaSemana = dt.getDay(); 
         if (diaSemana === 0 || diaSemana === 6) return true;
         const minutos = (dt.getHours() * 60) + dt.getMinutes();
         return (minutos < 510 || minutos > 1080);
+    }
+
+    function getMesMzone(mesNome) {
+        const meses = { "jan":0, "fev":1, "mar":2, "abr":3, "mai":4, "jun":5, "jul":6, "ago":7, "set":8, "out":9, "nov":10, "dez":11 };
+        return meses[mesNome.toLowerCase().substring(0,3)] || 0;
     }
 
     function setarDataAtual() {
@@ -148,11 +153,12 @@
     async function processarESalvar() {
         const raw = document.getElementById('rawData').value.trim();
         const tipo = document.getElementById('rastreador').value;
+        const placaAlvo = document.getElementById('placa').value.trim().toUpperCase();
         const justificativa = document.getElementById('justificativa').value.trim();
 
         if (!raw || !justificativa) return alert("Preencha os dados e a justificativa!");
 
-        let totalKm = 0, totalMins = 0, detalhes = "";
+        let totalKm = 0, totalMins = 0, h1 = "", h2 = "", detalhes = "";
         let detectPlaca = "", detectNome = "", detectData = "";
 
         try {
@@ -161,46 +167,31 @@
                 let viagens = [];
                 let viagemAtual = null;
 
-                // Percorre de baixo para cima (cronológico)
                 for (let i = linhas.length - 1; i >= 0; i--) {
                     const col = linhas[i].split('\t');
                     if (col.length >= 7 && col[1].includes('-')) {
-                        const status = col[0].trim(); // Ligada / Desligada
+                        const status = col[0].trim();
                         const [dPart, hPart] = col[1].split(' ');
                         const [d, m, a] = dPart.split('-');
                         const dt = new Date(a, m-1, d, hPart.split(':')[0], hPart.split(':')[1]);
 
                         if (estaForaDoHorario(dt)) {
                             detectData = dPart.replace(/-/g, '/');
-                            
-                            // Lógica de agrupamento de viagem
                             if (status === "Ligada" && !viagemAtual) {
-                                viagemAtual = { inicio: hPart, fim: hPart, de: col[6].trim(), para: col[6].trim(), tIni: dt.getTime() };
-                            } else if (viagemAtual) {
-                                viagemAtual.fim = hPart;
-                                viagemAtual.para = col[6].trim();
-                                if (status === "Desligada") {
-                                    const duracao = Math.round((dt.getTime() - viagemAtual.tIni) / 60000);
-                                    if (duracao > 1) { // Ignora registros de menos de 1 min
-                                        viagens.push(viagemAtual);
-                                        totalMins += duracao;
-                                    }
-                                    viagemAtual = null;
+                                viagemAtual = { ini: hPart, de: col[6].trim(), tIni: dt.getTime() };
+                            } else if (status === "Desligada" && viagemAtual) {
+                                const dur = Math.round((dt.getTime() - viagemAtual.tIni) / 60000);
+                                if (dur > 1) {
+                                    totalMins += dur;
+                                    viagens.push(`Hora: das ${viagemAtual.ini} às ${hPart}\nOrigem: ${viagemAtual.de}\nDestino: ${col[6].trim()}`);
                                 }
+                                viagemAtual = null;
                             }
                         }
                     }
                 }
-                // Se terminou o loop e ainda estava "ligada"
-                if (viagemAtual) {
-                    viagens.push(viagemAtual);
-                    totalMins += 5; // Estimativa se não houver ponto de desligada
-                }
-
-                if (!viagens.length) return alert("Nenhum deslocamento fora do horário encontrado nos dados do Carblock.");
-                
-                detalhes = viagens.map(v => `Hora: das ${v.inicio} às ${v.fim}\nOrigem: ${v.de}\nDestino: ${v.para}\n`).join('\n---\n');
-                totalKm = 0; // Carblock não tem KM no log, usuário deve conferir odômetro se necessário
+                if (!viagens.length) return alert("Sem dados Carblock fora do horário!");
+                detalhes = viagens.join('\n---\n');
 
             } else if (tipo === "Cobli") {
                 const linhas = raw.split('\n');
@@ -208,37 +199,42 @@
                 linhas.forEach(linha => {
                     const col = linha.split('\t');
                     if (col.length >= 8 && col[0].includes('/')) {
-                        const [dataP, horaP] = col[6].split(' ');
-                        const [d, m, a] = dataP.split('/');
-                        const dt = new Date(a, m-1, d, horaP.split(':')[0], horaP.split(':')[1]);
-                        if (estaForaDoHorario(dt)) {
-                            detectPlaca = col[1]; detectNome = col[2]; detectData = col[0];
-                            let km = parseFloat(col[4].replace(',', '.')) || 0;
-                            totalKm += km; totalMins += parseInt(col[3]) || 0;
-                            trechos.push(`Hora: das ${horaP} às ${col[7].split(' ')[1]} (${km.toString().replace('.',',')} km)`);
+                        const pLinha = col[1].trim().toUpperCase();
+                        if (!placaAlvo || pLinha === placaAlvo) {
+                            const [dataP, horaP] = col[6].split(' ');
+                            const [d, m, a] = dataP.split('/');
+                            if (estaForaDoHorario(new Date(a, m-1, d, horaP.split(':')[0], horaP.split(':')[1]))) {
+                                detectPlaca = pLinha; detectNome = col[2]; detectData = col[0];
+                                let km = parseFloat(col[4].replace(',', '.')) || 0;
+                                totalKm += km; totalMins += parseInt(col[3]) || 0;
+                                trechos.push(`Hora: das ${horaP} às ${col[7].split(' ')[1]} (${km.toString().replace('.',',')} km)`);
+                            }
                         }
                     }
                 });
+                if (!trechos.length) return alert("Sem dados Cobli fora do horário!");
                 detalhes = trechos.reverse().join('\n');
-            } else {
-                // MZONE TRIP DATA
-                const blocos = raw.split(/Trip Data/i).filter(b => b.trim().length > 20);
+
+            } else { 
+                // MZONE WEB
+                const blocos = raw.split(/(?=Trip Data|\d{1,2} de [a-z]{3} de \d{4})/gi).filter(b => b.includes('Distância'));
                 let trechos = [];
-                blocos.forEach(b => {
-                    const dM = b.match(/Distância\s+([\d,.]+)/i);
-                    const tM = b.match(/(?:(\d+)h)?\s*?(\d+)m\s+\(([\d:]+) - ([\d:]+)\)/i);
-                    if (dM && tM) {
-                        const hIni = tM[3];
-                        const dtT = new Date(); dtT.setHours(hIni.split(':')[0], hIni.split(':')[1]);
-                        if (estaForaDoHorario(dtT)) {
-                            let km = parseFloat(dM[1].replace(',', '.'));
-                            totalKm += km; totalMins += (parseInt(tM[1]||0)*60)+parseInt(tM[2]);
-                            trechos.push(`Hora: das ${tM[3]} às ${tM[4]} (${km.toString().replace('.',',')} km)`);
-                            const vM = b.match(/Veículo\s+([^\n-]+)/i);
-                            if (vM) { detectNome = vM[1].split(' - ')[0]; detectPlaca = vM[1].split(' - ')[1]; }
+                blocos.forEach(bloco => {
+                    const dataM = bloco.match(/(\d{1,2}) de ([a-z]{3,}) de (\d{4})/i);
+                    const tempoM = bloco.match(/(?:(\d+)h)?\s*?(\d+)m\s+\(([\d:]+) - ([\d:]+)\)/i);
+                    const kmM = bloco.match(/Distância\s+([\d,.]+)/i);
+                    if (dataM && tempoM && kmM) {
+                        const dtV = new Date(dataM[3], getMesMzone(dataM[2]), dataM[1], tempoM[3].split(':')[0], tempoM[3].split(':')[1]);
+                        if (estaForaDoHorario(dtV)) {
+                            let km = parseFloat(kmM[1].replace(',', '.'));
+                            totalKm += km; totalMins += (parseInt(tempoM[1]||0)*60)+parseInt(tempoM[2]);
+                            trechos.push(`Hora: das ${tempoM[3]} às ${tempoM[4]} (${km.toString().replace('.',',')} km)`);
+                            const vM = bloco.match(/Veículo\s+([^\n-]+)/i);
+                            if (vM && !detectPlaca) { detectNome = vM[1].split(' - ')[0]; detectPlaca = vM[1].split(' - ')[1]; }
                         }
                     }
                 });
+                if (!trechos.length) return alert("Sem dados Mzone fora do horário!");
                 detalhes = trechos.join('\n');
             }
 
